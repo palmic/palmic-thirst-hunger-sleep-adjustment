@@ -40,7 +40,7 @@ local ARSZI_POWER_CAP_REDUCTION_RATIO = 3 --Maximum power will be capped with a 
 local OUTFIT_WITH_HELMET_RADIATION_PROTECTION_REDUCTION_RATIO = 0.70 --Reduce the radiation protection of suits with integrated headgear. Emulates helmetless suit protection value
 
 --Satiety
-local ARSZI_SATIETY_REDUCTION_RATIO = 3
+local ARSZI_SATIETY_REDUCTION_RATIO = 5
 
 --Armour
 local ARSZI_INTEGRATED_SUIT_BONUS_ENABLED = true --Enables integrated suit radiation protection bonus.
