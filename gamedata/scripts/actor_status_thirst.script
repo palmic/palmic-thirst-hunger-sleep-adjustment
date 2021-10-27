@@ -41,6 +41,13 @@ local arszi_bleeding_thirst_table = {
 
 local arszi_previous_time = nil
 
+local FASTING_INFO_KEY="DIK_NUMPAD9"
+function on_key_release(key)
+	if (key == DIK_keys[FASTING_INFO_KEY]) then
+		printf("last_drink_chk=%s last_drink=%s",last_drink_chk and game.get_game_time():diffSec(last_drink_chk) or "nil",last_drink)
+	end
+end
+
 function create()
 	printdbg("- Water deprivation | Enabled")
 	feature_state = true
@@ -48,6 +55,7 @@ function create()
 	RegisterScriptCallback("actor_on_update",actor_on_update)
 	RegisterScriptCallback("actor_on_item_use",actor_on_item_use)
 	RegisterScriptCallback("actor_on_sleep",actor_on_sleep)
+	RegisterScriptCallback("on_key_release",on_key_release)
 	actor_status.add_indicator("Thirst",{
 		index= 3,
 		typ= "state",
@@ -66,6 +74,7 @@ function destroy()
 	UnregisterScriptCallback("actor_on_update",actor_on_update)
 	UnregisterScriptCallback("actor_on_item_use",actor_on_item_use)
 	UnregisterScriptCallback("actor_on_sleep",actor_on_sleep)
+	UnregisterScriptCallback("on_key_release",on_key_release)
 	alife_storage_manager.get_state().drink = nil
 	actor_status.add_indicator("Thirst",nil)
 end 
