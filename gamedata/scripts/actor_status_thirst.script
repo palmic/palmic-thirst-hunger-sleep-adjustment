@@ -20,6 +20,8 @@ local drink_chk				= 300 -- amount of in-game seconds where indicator value incr
 local itn_mul 				= 0.001
 local eat_thirstiness_mul	= 1000
 local pwr_rate,rng_factor 	= -0.00010, 0.08
+local dmg_modifier_pwr      = 0.1
+local dmg_modifier_hlt      = 0.01
 local caff_max				= 3
 local die_chance 			= 5
 
@@ -232,9 +234,9 @@ function actor_on_update(b,d)
 		local tg = time_global()
 		if (pwr_chk == nil or tg > pwr_chk) then 
 			if (db.actor.power > 0) then
-				db.actor:change_power(pwr_rate*((last_drink-start_blur_1)*rng_factor)/10)
+				db.actor:change_power(pwr_rate*((last_drink-start_blur_1)*rng_factor)*dmg_modifier_pwr)
 				if last_drink > start_blur_4 then
-				  db.actor:change_health(pwr_rate*((last_drink-start_blur_4)*rng_factor)/100)
+				  db.actor:change_health(pwr_rate*((last_drink-start_blur_4)*rng_factor)*dmg_modifier_hlt)
 				end
 			end
 			pwr_chk = tg+100
