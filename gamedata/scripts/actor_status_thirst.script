@@ -1,8 +1,8 @@
--- Changed for IMM	by Faustle (2018)
--- Edited by Tronex
--- 2018/2/18 - modified indicator icon to show properly and work with HUD toggle
--- 2018/11/7 - modified values for Anomaly
--- Water deprivation
+-- Changed by Palmic (2021)
+
+-- requires:
+--    ADR - ARSZI\'S DYNAMIC RADIATION ZONES AND RADIATION OVERHAUL V2.1 FOR ANOMALY 1.5.1
+
 
 local last_drink, last_drink_chk, pwr_chk
 local feature_state
@@ -28,9 +28,16 @@ local die_chance 			= 5
 local ARSZI_ENABLE_THIRST_FEATURES = true --Enable extra water loss while walking/running/bleeding. This setting DOES NOT affect radiation-related water loss!
 local arszi_radiation_thirst_reduction_ratio = 3 --Thirst satiety by drinking is reduced by X at maximum radiation level
 local arszi_thirst_walk_threshold = 2 --Above this velocity the player is walking
-local arszi_thirst_walk = 0.05 --Thirst increasement per in-game seconds while the player is walking
 local arszi_thirst_run_threshold = 5 --Above this velocity the player is running/sprinting
-local arszi_thirst_run = 1 --Thirst increasement per in-game seconds while the player is running/sprinting
+
+--Thirst increasement coeficien per in-game seconds while the player is walking
+--If player is walking, thirst will incremment by up_drink + up_drink * arszi_thirst_walk_coef
+local arszi_thirst_walk_coef = 0.005
+
+--Thirst increasement coeficien per in-game seconds while the player is running/sprinting
+--If player is running, thirst will incremment by up_drink + up_drink * arszi_thirst_run_threshold
+local arszi_thirst_run_coef = 0.1
+
 
 --Difficulty-based water loss while bleeding settings. Thirst increasement multiplied by bleeding intensity per in-game seconds.
 local arszi_bleeding_thirst_table = {
@@ -223,10 +230,10 @@ function actor_on_update(b,d)
 			--arszi_radiation.show_message("SPEED: "..tostring(math.sqrt(vec.x*vec.x+vec.y*vec.y+vec.z*vec.z)))
 			if (cur_speed > arszi_thirst_run_threshold) then
 				--arszi_radiation.show_message("RUN: "..last_drink)
-				last_drink = last_drink + arszi_thirst_run
+				last_drink = last_drink + up_drink * arszi_thirst_run_coef
 			elseif (cur_speed > arszi_thirst_walk_threshold) then
 				--arszi_radiation.show_message("WALK: "..last_drink)
-				last_drink = last_drink + arszi_thirst_walk
+				last_drink = last_drink + up_drink * arszi_thirst_walk_coef
 			end
 
 			--increase thirstiness during bleeding
