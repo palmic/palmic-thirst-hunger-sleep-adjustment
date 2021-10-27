@@ -233,7 +233,9 @@ function actor_on_update(b,d)
 		if (pwr_chk == nil or tg > pwr_chk) then 
 			if (db.actor.power > 0) then
 				db.actor:change_power(pwr_rate*((last_drink-start_blur_1)*rng_factor)/10)
-				db.actor:change_health(pwr_rate*((last_drink-start_blur_1)*rng_factor)/100)
+				if last_drink > start_blur_4 then
+				  db.actor:change_health(pwr_rate*((last_drink-start_blur_4)*rng_factor)/100)
+				end
 			end
 			pwr_chk = tg+100
 		end
