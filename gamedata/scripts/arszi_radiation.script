@@ -1,6 +1,8 @@
---Author: Arszi
---Dynamic and Weather-based radiation module 2.1
---Last modified 2021.04.25
+-- Changed by Palmic (2021)
+
+-- requires:
+--    ADR - ARSZI\'S DYNAMIC RADIATION ZONES AND RADIATION OVERHAUL V2.1 FOR ANOMALY 1.5.1
+
 
 --***SETTINGS**************************************************************************************************************************************
 --Radiation zone spawn
