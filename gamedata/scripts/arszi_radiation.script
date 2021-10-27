@@ -1,0 +1,1620 @@
+--Author: Arszi
+--Dynamic and Weather-based radiation module 2.1
+--Last modified 2021.04.25
+
+--***SETTINGS**************************************************************************************************************************************
+--Radiation zone spawn
+local ENABLE_DYNAMIC_RADIATION_ZONES = true --Enables spawning dynamic radiation zones at New Game
+local ENABLE_DYNAMIC_RADIATION_ZONES_NPP = true --Enables spawning dynamic radiation zones at New Game for the interrior of the Nuclear Power Plant
+
+--Weather
+local WEATHER_INFO_KEY = "DIK_9"
+local MAX_WIND_VELOCITY = 700 --Maximum value for wind velocity, which affects radiation zone strength and szize.
+local POWER_REDUCTION_BY_RAIN = 0.75 --Radiation zones will done this percentage of their damage in case of rain or storm
+local MAX_SIZE_INCREASEMENT_BY_WIND = 3 --At maximal wind power, radiation zones will incerase their size by this factor
+local OVERRIDE_MAX_POWER_INCREASEMENT_BY_WIND = false --Overrides difficulty setting-based setting with MAX_POWER_INCREASEMENT_BY_WIND
+local MAX_POWER_INCREASEMENT_BY_WIND = 1.8 --At maximal wind power, radiation zones will multiply their power by this factor
+local SIZE_INCREASED_PER_WIND_VELOCITY_UNIT = MAX_WIND_VELOCITY / MAX_SIZE_INCREASEMENT_BY_WIND
+local ENABLE_WIND_POWER_NOTIFICATIONS = true --Enables notifications about wind power changes (medium and high power)
+local ENABLE_WEATHER_REPORTS = true --Enable reports on map transitions and when the weather changes
+
+--Wind alert states
+local WIND_ALERT_STATES = {
+  NoAlert = 0,
+  Medium = 1,
+  Strong = 2
+}
+
+--MAX_POWER_INCREASEMENT_BY_WIND settings based on difficulty
+local DIFFICULTY_WIND_POWER_SETTINGS = {
+  Easy = 1.5,
+  Medium = 1.6,
+  Hard = 1.7
+}
+
+--Power
+local ARSZI_POWER_REGENERATION_REDUCTION_RATIO = 3 --Power will regenate x times slower with maximum radiation
+local ARSZI_POWER_CAP_REDUCTION_RATIO = 3 --Maximum power will be capped with a fraction of x of the maximum power with maximum radiation
+
+--Water
+local OUTFIT_WITH_HELMET_RADIATION_PROTECTION_REDUCTION_RATIO = 0.70 --Reduce the radiation protection of suits with integrated headgear. Emulates helmetless suit protection value
+
+--Satiety
+local ARSZI_SATIETY_REDUCTION_RATIO = 3
+
+--Armour
+local ARSZI_INTEGRATED_SUIT_BONUS_ENABLED = true --Enables integrated suit radiation protection bonus.
+
+--Dosimeter
+local DOSIMETER_VOLUME_UP_KEY = "DIK_ADD"
+local DOSIMETER_VOLUME_DOWN_KEY = "DIK_SUBTRACT"
+
+local WIND_DIRECTIONS = {
+  N = "North",
+  NE = "NorthEast",
+  E = "East",
+  SE = "SouthEast",
+  S = "South",
+  SW = "SouthWest",
+  W = "West",
+  NW = "NorthWest",
+  No_wind = ""
+}
+
+--New radiation zones should not spawn on theese smarts.
+--They are either faction bases, or the are too close to faction bases
+local blacklisted_smarts = {
+  l01_escape = {  
+    esc_smart_terrain_3_16 = true,
+    esc_smart_terrain_2_12 = true,
+    esc_smart_terrain_5_7 = true,
+    esc_smart_terrain_4_9 = true
+  },
+  y04_pole = {
+  },
+  k00_marsh = {
+    mar_smart_terrain_base = true,
+    mar_smart_terrain_5_8 = true,
+    mar_smart_terrain_doc_2 = true
+  },
+  k01_darkscape = {
+    ds2_domik_st = true
+  },
+  l02_garbage = {
+    gar_smart_terrain_3_5 = true,
+    gar_smart_terrain_6_3 = true
+  },
+  l04_darkvalley = {
+    val_smart_terrain_7_3 = true,
+    val_smart_terrain_7_4 = true,
+    val_smart_terrain_7_5 = true,
+    val_smart_terrain_8_6 = true,
+    val_smart_terrain_7_8 = true, --Smart Z position is too low
+    val_smart_terrain_8_9 = true  --Smart Z position is too low
+  },
+  l03_agroprom = {
+    agr_smart_terrain_1_6 = true,
+    agr_smart_terrain_1_6_near_1 = true,
+    agr_smart_terrain_1_6_near_2 = true
+  },
+  l08_yantar = {
+    yan_smart_terrain_3_6 = true,
+    yan_smart_terrain_6_4 = true,
+  },
+  l06_rostok = {
+  },
+  l05_bar = {
+    bar_dolg_bunker = true,
+    bar_dolg_general = true,
+    bar_visitors = true,
+    bar_zastava = true,
+    bar_zastava_2 = true,
+  },
+  k02_trucks_cemetery = {
+    trc_sim_20 = true
+  },
+  l09_deadcity = {
+    cit_killers = true,
+  },
+  l07_military = {
+    mil_smart_terrain_7_10 = true,
+    mil_smart_terrain_7_8 = true,
+    mil_smart_terrain_7_7 = true,
+    mil_smart_terrain_7_12 = true
+  },
+  l10_red_forest = {  
+    red_smart_terrain_3_2 = true 
+  },
+  l10_radar = {  
+  },
+  l10_limansk = {   
+  },
+  jupiter = {
+    jup_a6 = true,
+    jup_b41 = true
+  },
+  l11_pripyat = {
+    mlr_terrain = true,
+    pri_monolith = true,
+  },
+  pripyat = {
+    pri_a18_smart_terrain = true,
+    kbo_terrain = true,
+    pri_b306 = true,
+    pri_a16 = true,
+    pri_a16_mlr_copy = true,
+    pri_a28_base = true,
+    pri_b36_smart_terrain = true
+  },
+  l11_hospital = {   
+  },
+  zaton = {
+    zat_b40_smart_terrain = true,
+    zat_b18 = true,
+    zat_stalker_base_smart = true,
+    zat_sim_27 = true
+  },
+  l12_stancia = {   
+  },
+  l12_stancia_2 = {
+  },
+  l13_generators = {   
+  },
+  l12u_sarcofag = {
+    sar_monolith_general = true
+  }
+}
+
+--New radiation zones settings for levels
+--Chance_to_spawn is the percentage
+--Radius original (minimum) radius of the new radiation zone
+local radiation_field_level_settings = {
+  l01_escape = {
+    Name = "l01_escape",
+    Radiation_field = "zone_radioactive_very_weak",
+    Chance_to_spawn = 25,
+    Radius = 10
+  },
+  y04_pole = {
+    Name = "y04_pole",
+    Radiation_field = "zone_radioactive_very_weak",
+    Chance_to_spawn = 25,
+    Radius = 10
+  },
+  k00_marsh = {
+    Name = "k00_marsh",
+    Radiation_field = "zone_radioactive_very_weak",
+    Chance_to_spawn = 25,
+    Radius = 10
+  },
+  k01_darkscape = {
+    Name = "k01_darkscape",
+    Radiation_field = "zone_radioactive_very_weak",
+    Chance_to_spawn = 25,
+    Radius = 10
+  },
+  l02_garbage = {
+    Name = "l02_garbage",
+    Radiation_field = "zone_radioactive_weak",
+    Chance_to_spawn = 30,
+    Radius = 12
+  },
+  l04_darkvalley = {
+    Name = "l04_darkvalley",
+    Radiation_field = "zone_radioactive_weak",
+    Chance_to_spawn = 30,
+    Radius = 12
+  },
+  l03_agroprom = {
+    Name = "l03_agroprom",
+    Radiation_field = "zone_radioactive_weak",
+    Chance_to_spawn = 30,
+    Radius = 12
+  },
+  l08_yantar = {
+    Name = "l08_yantar",
+    Radiation_field = "zone_radioactive_below_average",
+    Chance_to_spawn = 35,
+    Radius = 14
+  },
+  l06_rostok = {
+    Name = "l06_rostok",
+    Radiation_field = "zone_radioactive_below_average",
+    Chance_to_spawn = 35,
+    Radius = 14
+  },
+  l05_bar = {
+    Name = "l05_bar",
+    Radiation_field = "zone_radioactive_below_average",
+    Chance_to_spawn = 35,
+    Radius = 10
+  },
+  k02_trucks_cemetery = {
+    Name = "k02_trucks_cemetery",
+    Radiation_field = "zone_radioactive_below_average",
+    Chance_to_spawn = 35,
+    Radius = 14
+  },
+  l09_deadcity = {
+    Name = "l09_deadcity",
+    Radiation_field = "zone_radioactive_below_average",
+    Chance_to_spawn = 35,
+    Radius = 14
+  },
+  l07_military = {
+    Name = "l07_military",
+    Radiation_field = "zone_radioactive_below_average",
+    Chance_to_spawn = 35,
+    Radius = 14
+  },
+  l10_red_forest = {
+    Name = "l10_red_forest",
+    Radiation_field = "zone_radioactive_average",
+    Chance_to_spawn = 40,
+    Radius = 16   
+  },
+  l10_radar = {
+    Name = "l10_radar",
+    Radiation_field = "zone_radioactive_average",
+    Chance_to_spawn = 40,
+    Radius = 16     
+  },
+  l10_limansk = {
+    Name = "l10_limansk",
+    Radiation_field = "zone_radioactive_average",
+    Chance_to_spawn = 40,
+    Radius = 16     
+  },
+  jupiter = {
+    Name = "jupiter",
+    Radiation_field = "zone_radioactive_above_average",
+    Chance_to_spawn = 45,
+    Radius = 18 
+  },
+  l11_pripyat = {
+    Name = "l11_pripyat",
+    Radiation_field = "zone_radioactive_above_average",
+    Chance_to_spawn = 0,
+    Radius = 18 
+  },
+  pripyat = {
+    Name = "pripyat",
+    Radiation_field = "zone_radioactive_above_average",
+    Chance_to_spawn = 45,
+    Radius = 18 
+  },
+  l11_hospital = {
+    Name = "l11_hospital",
+    Radiation_field = "zone_radioactive_above_average",
+    Chance_to_spawn = 45,
+    Radius = 18    
+  },
+  zaton = {
+    Name = "zaton",
+    Radiation_field = "zone_radioactive_above_average",
+    Chance_to_spawn = 45,
+    Radius = 18    
+  },
+  l12_stancia = {
+    Name = "l12_stancia",
+    Radiation_field = "zone_radioactive_strong",
+    Chance_to_spawn = 50,
+    Radius = 20     
+  },
+  l12_stancia_2 = {
+    Name = "l12_stancia_2",
+    Radiation_field = "zone_radioactive_strong",
+    Chance_to_spawn = 50,
+    Radius = 20  
+  },
+  l13_generators = {
+    Name = "l13_generators",
+    Radiation_field = "zone_radioactive_strong",
+    Chance_to_spawn = 50,
+    Radius = 20     
+  }
+}
+
+--Special radioactive field spawns for NPP interrior
+local special_spawn_l12u_sarcofag = {
+  Name = "l12u_sarcofag",
+  Radiation_field = "zone_radioactive_lethal",
+  Chance_to_spawn = 100,
+  Radius = 20     
+}
+
+--Some anomlies will affect new game start point, like scientist bunker in Yantar. They should be capped.
+local blacklisted_static_radiation_anomalies = {
+  -- l01_escape
+  esc_zone_field_radioactive_weak_0000 = 80,
+  esc_zone_field_radioactive_weak_0011 = 75,
+  esc_zone_field_radioactive_weak_0012 = 75,
+  esc_zone_field_radioactive_weak_0013 = 75,
+
+  --k00_marsh
+  mar_zone_field_radioactive_weak_0007 = 80,
+
+  --pripyat
+  pripyat_zone_field_radioactive_weak_0001 = 5,
+
+  --l04_darkvalley
+  val_zone_field_radioactive_weak_baza_freedom_0016 = 3,
+  val_zone_field_radioactive_weak_baza_freedom_0018 = 3,
+  val_zone_field_radioactive_weak_baza_freedom_0019 = 3,
+
+  --l03_agroprom
+  agr_zone_field_radioactive_average_000 =	20,
+
+  --l07_military
+  mil_zone_field_radioactive_strong = 25,
+  mil_zone_field_radioactive_strong_3 = 50,
+
+  --zaton
+  zaton_zone_field_radioactive_average_0007 = 20,
+  zaton_zone_field_radioactive_average_0008	= 20,
+  zaton_zone_field_radioactive_average_0013 = 20,
+
+  --Name of level: l02_garbage
+  gar_zone_field_radioactive_weak_0001 = 50,
+  gar_zone_field_radioactive_weak_0002 = 40
+}
+
+--Underground maps should not be affected by dynamic radiations and wind behaviour
+local underground_maps = {
+  l03u_agr_underground = true,
+  l08u_brainlab = true,
+  l10u_bunker = true,
+  jupiter_underground = true,
+  l04u_labx18 = true,
+  labx8 = true,
+  l12u_sarcofag = true,
+  l12u_control_monolith = true,
+  l13u_warlab = true
+}
+
+--Radiation zones the player is in
+local radiation_zones = {}
+
+--Table for state management
+local radiation_table = {}
+
+--Hack for a wonderful bug in the LUA interpreter itself possibly. IT IS CURSED!
+environmental_radiation = 0
+
+--Hack for icon removal
+local ico_n_removed = false
+local ico_p_removed = false
+
+--***POWER**************************************************************************************************************************************
+function manage_power()
+  if (not db.actor) then return end
+  if (db.actor.radiation == 0) then return end
+  if (not radiation_table.last_power) then radiation_table.last_power = db.actor.power end
+
+  local last_power = radiation_table.last_power
+  local difference = db.actor.power - last_power
+  if (difference > 0) then
+    db.actor.power = db.actor.power - get_power_difference(difference)
+
+    --Cap maximum power
+    if (db.actor.power > (get_power_total())) then
+      db.actor.power = get_power_total()
+    end
+  end
+
+  radiation_table.last_power = db.actor.power
+  --show_message("power "..db.actor.power)
+end
+
+function get_power_difference(difference)
+  local min = difference / ARSZI_POWER_REGENERATION_REDUCTION_RATIO
+  local reduce_by_min = difference - min
+  return reduce_by_min * db.actor.radiation
+end
+
+function get_power_total()
+  local min = 1 / ARSZI_POWER_CAP_REDUCTION_RATIO
+  local reduce_by_min = 1 - min
+  local reduce_by_total = reduce_by_min * db.actor.radiation
+  return 1 - reduce_by_total
+end
+
+--***SATIETY***********************************************************************************************************************************
+function manage_satiety()
+  if (not db.actor) then return end
+
+  local conditions = db.actor:cast_Actor():conditions()
+  local satiety = conditions and conditions:GetSatiety()
+
+  if (not radiation_table.last_satiety) then 
+    radiation_table.last_satiety = satiety
+  end
+
+  local last_satiety = radiation_table.last_satiety
+
+  if (satiety > last_satiety) then
+    local difference = math.abs(satiety - last_satiety)
+    local new_satiety = satiety - get_satiety_difference(difference)
+
+    db.actor.satiety = new_satiety
+    radiation_table.last_satiety = new_satiety
+  else
+    radiation_table.last_satiety = satiety
+  end
+end
+
+function get_satiety_difference(difference)
+  local min = difference / ARSZI_SATIETY_REDUCTION_RATIO
+  local reduce_by_min = difference - min
+  return reduce_by_min * db.actor.radiation
+end
+
+--***SPAWN RADIATION FIELDS**************************************************************************************************************************************
+--Spawns dynamic radiation zones at non-blacklisted smart randomly
+function spawn_radiation_fields_at_new_game()
+  trace_this("spawn_radiation_fields_at_new_game()")
+
+  for k, v in pairs (radiation_field_level_settings) do
+    spawn_radiation_fields_for_level(v)
+  end
+end
+
+--Creates new radiation fields for the current level
+function spawn_radiation_fields_for_level(current_level_settings)
+  trace_this("spawn_radiation_fields_for_level: "..current_level_settings.Name.." ************************************************")
+
+  trace_this("get_smart_terrains_of_level: "..current_level_settings.Name)
+  local smarts_of_level = get_smart_terrains_of_level(current_level_settings.Name)
+
+  trace_this("get blacklisted smarts")
+  local blacklisted_smarts_for_level = blacklisted_smarts[current_level_settings.Name]
+
+  trace_this("Iterate through smarts")
+  for ksmart, smart in pairs (smarts_of_level) do
+
+    local name_of_smart = smart:name()
+    if (not blacklisted_smarts_for_level[name_of_smart]) then
+
+      if (math.random(1, 100) <= current_level_settings.Chance_to_spawn) then
+        trace_this("Spawn default radiation zone for smart: "..name_of_smart)
+
+        create_radiation_field(
+          current_level_settings.Radiation_field, 
+          smart.position, 
+          smart.m_game_vertex_id, 
+          level.vertex_id(smart.position), 
+          current_level_settings.Radius)
+      end
+    
+    else
+      trace_this("Smart: "..name_of_smart.." is black listed, skip")
+    end
+
+  end
+end
+
+--Creates a new radiation field
+function create_radiation_field(anomaly_type, position, game_vertex_id, level_vertex_id, radius)
+	trace_this("create_radiation_field: "..anomaly_type.." Radius: "..radius.. " *****************")
+  
+	trace_this("spawn anomaly")
+	local se_obj = alife( ):create(anomaly_type, position, level_vertex_id, game_vertex_id)
+  
+	if (not se_obj) then
+	  trace_this("NO ANOMALY WERE SPAWNED")
+	  return
+	end
+	  
+	local data = utils_stpk.get_anom_zone_data( se_obj )
+	if (not data) then
+	  trace_this( "Error: Unable to set dynamic anomaly properties" )
+	  return
+	end
+  
+	data.shapes[1] = {}
+	data.shapes[1].shtype = 0
+	data.shapes[1].offset = vector( ):set( 0, 0, 0 )  -- Leave for compatibility with CoC 1.4.22, delete later
+	data.shapes[1].center = vector( ):set( 0, 0, 0 )
+	data.shapes[1].radius = radius
+	utils_stpk.set_anom_zone_data(data, se_obj)
+	
+	trace_this(se_obj.id)
+	trace_this("Radiation field was spawned succesfully")
+end
+
+--Get smart terrains if the level
+function get_smart_terrains_of_level(level_name)
+	trace_this("get_smart_terrains_of_level("..level_name..")")
+	smarts_of_level = {}
+
+	for id,smart in pairs(db.smart_terrain_by_id) do	
+		cvertex = smart and game_graph():vertex(smart.m_game_vertex_id)
+		
+		if (cvertex and alife():level_name(cvertex:level_id()) == level_name) then
+			table.insert(smarts_of_level, smart)
+		end
+	end
+	
+	return smarts_of_level
+end
+
+--Resizes every radiation field in the game, except ones from blacklisted maps
+function resize_radiation_fields()
+  trace_this("resize_radiation_fields()")
+
+    --Check every objects
+    for i=1,65534 do
+      local se_obj = alife():object(i)     
+  
+      if (se_obj) then
+
+        if (se_obj["name"]) then
+          local name = se_obj:name()
+          if (string.match(name, "zone_field_radioactive") or string.match(name, "zone_radioactive")) then
+            trace_this("**************************************************")
+            trace_this(name.." ID: "..i)
+
+            local cvertex = game_graph():vertex(se_obj.m_game_vertex_id)
+            local name_of_level = alife():level_name(cvertex:level_id())
+            trace_this("Name of level: "..name_of_level)
+
+            if (not underground_maps[name_of_level]) then
+
+              local data = utils_stpk.get_anom_zone_data(se_obj)
+              if (data) then
+                if (data.shapes[1]["radius"]) then
+
+                  local radius = data.shapes[1].radius
+                  local position = se_obj.position
+                  local game_vertex_id = se_obj.m_game_vertex_id
+                  local level_vertex_id = level.vertex_id(se_obj.position)
+
+                  local new_radius = get_new_radius_of_static_anomaly_field(name, radius)         
+                  trace_this("Original radius: "..radius.." New radius: "..new_radius)
+
+                  data.shapes[1] = {}
+                  data.shapes[1].shtype = 0
+                  data.shapes[1].offset = vector():set( 0, 0, 0 )  -- Leave for compatibility with CoC 1.4.22, delete later
+                  data.shapes[1].center = vector():set( 0, 0, 0 )
+                  data.shapes[1].radius = new_radius
+                  utils_stpk.set_anom_zone_data( data, se_obj )
+                    
+                  alife():set_switch_offline(se_obj.id,false)
+                  alife():set_switch_online(se_obj.id,true)
+                  trace_this("Resizing completed")
+                else
+                  trace_this("NO RADIUS FOR: "..i)
+                end
+              else
+                trace_this("NO DATA FOR: "..i)
+              end
+            else
+              trace_this("Level is underground level, skip: "..name_of_level)
+            end
+          end
+        else
+          trace_this("No name for: "..i)
+      end
+    end
+  end
+end
+
+--Return the new radiation field size, taking blacklist into account
+function get_new_radius_of_static_anomaly_field(name_of_radiation_zone, radius)
+
+  local override = blacklisted_static_radiation_anomalies[name_of_radiation_zone]
+  if (override) then
+    trace_this("Radiation zone is blacklisted by position, return custom max radius: "..override)
+    return override
+  else
+    trace_this("Not a blacklisted radiation zone")
+    return get_maximal_radius_with_wind_direction(radius)
+  end
+end
+
+--***UTILITIES**************************************************************************************************************************************
+--Power for radiation damage calculation
+function calculate_zone_radiation_power(power, radiation_zone)
+  --check of level is an underground level
+  if (is_underground_map()) then  
+    radiation_zones[radiation_zone:id()] = true
+    return power 
+  end
+
+    --Check if the source of radiation damage is water
+  if (is_player_in_water() and radiation_zone and (radiation_zone:id() == db.actor:id())) then
+    --Ignore mask protection
+    local headgear_object = db.actor:item_in_slot(12)
+    local outfit_object = db.actor:item_in_slot(7)
+    local headgear_radiation_protection = (headgear_object and get_radiation_protection(headgear_object)) or 0
+    local outfit_radiation_protection = (outfit_object and get_radiation_protection(outfit_object)) or 0
+    local helmet_avaliable = is_helmet_integrated()
+    local total_radiation_protection = headgear_radiation_protection + outfit_radiation_protection
+
+    --irradiate material
+    if (outfit_object) then
+      local condition = outfit_object:condition()
+
+      if (condition > 0.05) then
+        local armour_radiation_protection_ratio = 0.06 - outfit_radiation_protection
+        if (armour_radiation_protection_ratio < 0) then armour_radiation_protection_ratio = 0.004 end
+
+        outfit_object:set_condition(condition - (power * armour_radiation_protection_ratio / 4))
+        db.actor.radiation = db.actor.radiation + (power * armour_radiation_protection_ratio)
+      end
+
+      --show_message("RADIATION PROT: "..outfit_radiation_protection.." CONDITION: "..condition.." POWER: "..power)
+    end
+
+    --If helmet is avaiable, increase the radiation of water by (1 + outfit_with_helmet_radiation_protection_reduction_ratio). Else, increase it by the protection ratio of the headgear
+    if (outfit_object and helmet_avaliable) then
+      power = power + ((outfit_radiation_protection * OUTFIT_WITH_HELMET_RADIATION_PROTECTION_REDUCTION_RATIO) / 10)
+      --show_message(tostring(s_hit.power.." "..s_hit.type))
+      --show_message("outfit with helmet radiation protection: "..outfit_radiation_protection.." reduced: "..(outfit_radiation_protection * 0.3))
+    else
+      power = power + (headgear_radiation_protection / 10)
+      --show_message(tostring(s_hit.power.." "..s_hit.type))
+      --show_message("Headgear rad protection: "..tostring(headgear_radiation_protection).." Outfit rad protection: "..outfit_radiation_protection.." total: "..total_radiation_protection)
+    end
+
+    radiation_zones[radiation_zone:id()] = true
+    return power
+  end
+
+  --Disable radiation damage, if the player is not in the current anomaly zone radius
+  if (not is_actor_in_radiation_zone(radiation_zone:id())) then 
+    radiation_zones[radiation_zone:id()] = nil
+    return 0 
+  end
+
+  --Give 20% radiation resistance boost for suits with integrated helmet
+  if (ARSZI_INTEGRATED_SUIT_BONUS_ENABLED) then
+    if (is_helmet_integrated() and db.actor:item_in_slot(7)) then
+      local original_hit_power = power
+      power = power * 0.80
+    end
+  end
+
+  local wind_velocity = get_wind_velocity()
+  local current_weather = get_current_weather()
+
+  --In rain and storm radiation zones won't expand in radius and be weaker
+  if (current_weather == "rain" or current_weather == "storm") then
+    --show_message("Reduced by rain. Original: "..s_hit.power.." Reduced: "..(s_hit.power * POWER_REDUCTION_BY_RAIN))
+    radiation_zones[radiation_zone:id()] = true
+    return power * POWER_REDUCTION_BY_RAIN
+  end
+
+  --In foggy weather radiation zones won't expand in radius
+  if (current_weather == "foggy") then 
+    radiation_zones[radiation_zone:id()] = true
+    return power 
+  end
+
+  local power_increasement_factor = (wind_velocity / MAX_WIND_VELOCITY) * (get_max_power_increasement_by_wind() - 1)
+  --show_message("Wind velocity: "..wind_velocity.." Power incerase factor: "..power_increasement_factor.." Original: "..s_hit.power.." Increased: "..s_hit.power * (1 + power_increasement_factor))
+  radiation_zones[radiation_zone:id()] = true
+  return power * (1 + power_increasement_factor)
+end
+
+--Power dosimeter-related power calcuation. HUD and ticking.
+function get_environmental_radiation_power()
+
+  --WATER
+  if (is_player_in_water()) then 
+    local power = 0 
+    
+    if (is_underground_map()) then 
+      power = math.random(29, 35) / 1000
+    else
+      power = math.random(15, 17) / 1000
+    end
+
+    environmental_radiation = power
+    return power
+  end
+
+    --Check if player is inside a zone
+  local count = 0
+  for k, _ in pairs(radiation_zones) do
+    count = count + 1
+  end
+
+  if (count == 0) then 
+    environmental_radiation = 0
+    return 0 
+  end
+
+  local power = level.get_env_rads()
+  local min = math.floor(power * 1000 * 0.9)
+  local max = math.floor(power * 1000 * 1.1)
+  power = math.random(min, max) / 1000
+
+  --UNDERGROUND
+  if (is_underground_map()) then 
+    environmental_radiation = power
+    return power 
+  end
+
+  local wind_velocity = get_wind_velocity()
+  local current_weather = get_current_weather()
+
+  --RAIN/STORM
+  if (current_weather == "rain" or current_weather == "storm") then
+    power = power * POWER_REDUCTION_BY_RAIN
+    environmental_radiation = power
+    return power
+  end
+
+  --FOG
+  if (current_weather == "foggy") then 
+    environmental_radiation = power
+    return power 
+  end
+
+  --NORMAL
+  local power_increasement_factor = (wind_velocity / MAX_WIND_VELOCITY) * (get_max_power_increasement_by_wind() - 1)
+  power = power * (1 + power_increasement_factor)
+
+  --Hax to make Dosimeter UI work
+  environmental_radiation = power
+
+  return power
+end
+
+--Gets maximal power increasement by wind based on game difficulty setting or override
+function get_max_power_increasement_by_wind()
+  --Check if overridden
+  if (OVERRIDE_MAX_POWER_INCREASEMENT_BY_WIND) then
+    --show_message("WIND POWER SETTING OVERRIDE: "..MAX_POWER_INCREASEMENT_BY_WIND)
+    return MAX_POWER_INCREASEMENT_BY_WIND
+  end
+
+  --Return setting based on game-difficulty
+  local gameplay = alife_storage_manager.get_state().diff_game
+  local game_num = gameplay and gameplay["type"] or 2
+
+  local wind_power_setting = 1.6
+  if (game_num == 1) then wind_power_setting = DIFFICULTY_WIND_POWER_SETTINGS.Easy end
+  if (game_num == 2) then wind_power_setting = DIFFICULTY_WIND_POWER_SETTINGS.Medium end
+  if (game_num == 3) then wind_power_setting = DIFFICULTY_WIND_POWER_SETTINGS.Hard end
+
+  --show_message("WIND POWER SETTING: "..wind_power_setting)
+  return wind_power_setting
+end
+
+--Gets if a map is an underground map
+function is_underground_map()
+  local name_of_level = level.name()
+  if (not name_of_level) then return true end
+  if (underground_maps[name_of_level]) then
+    return true
+  else
+    return false
+  end
+end
+
+function get_min_radius_multiplier()
+  local min_radius = 10
+  local max_radius = min_radius * MAX_SIZE_INCREASEMENT_BY_WIND
+  local max_width = max_radius * 2
+  local max_radius_with_wind = max_width - min_radius
+  return (min_radius / max_radius_with_wind)
+end
+
+function get_current_radius_of_radioactive_zone(radius_max)
+  local min_radius = radius_max / MAX_SIZE_INCREASEMENT_BY_WIND
+  local percentage_ratio = get_wind_velocity() / MAX_WIND_VELOCITY
+  return ((radius_max - min_radius) * percentage_ratio) + min_radius
+end
+
+function get_original_radius_of_radiation_zone(radius_max)
+  return radius_max * get_min_radius_multiplier()
+end
+
+--Maximum radius without buffer
+function get_max_radius_without_wind(radius_max_with_wind)
+  local radius_min = radius_max_with_wind * get_min_radius_multiplier()
+  local radius_max = radius_min * MAX_SIZE_INCREASEMENT_BY_WIND
+  return radius_max
+end
+
+--Maximum radius with buffer
+function get_maximal_radius_with_wind_direction(min_radius)
+  local max_radius = min_radius * MAX_SIZE_INCREASEMENT_BY_WIND
+  local max_width = max_radius * 2
+  return max_width - min_radius
+end
+
+function get_current_center_of_radioactive_zone(radius_max_without_wind, initial_position, direction_of_wind)
+  local min_radius = radius_max_without_wind / MAX_SIZE_INCREASEMENT_BY_WIND
+  local current_radius = get_current_radius_of_radioactive_zone(radius_max_without_wind)
+  local offset = current_radius - min_radius
+
+  if (direction_of_wind == WIND_DIRECTIONS.N) then
+      return vector():set(initial_position.x, initial_position.y, initial_position.z - offset)
+  end
+
+  if (direction_of_wind == WIND_DIRECTIONS.NE) then
+      return vector():set(initial_position.x - offset, initial_position.y, initial_position.z - offset)
+  end
+
+  if (direction_of_wind == WIND_DIRECTIONS.NW) then
+      return vector():set(initial_position.x + offset, initial_position.y, initial_position.z - offset)
+  end
+
+  if (direction_of_wind == WIND_DIRECTIONS.S) then
+      return vector():set(initial_position.x, initial_position.y, initial_position.z + offset)
+  end
+
+  if (direction_of_wind == WIND_DIRECTIONS.SE) then
+      return vector():set(initial_position.x - offset, initial_position.y, initial_position.z + offset)
+  end
+
+  if (direction_of_wind == WIND_DIRECTIONS.SW) then
+      return vector():set(initial_position.x + offset, initial_position.y, initial_position.z + offset)
+  end
+
+  if (direction_of_wind == WIND_DIRECTIONS.E) then
+      return vector():set(initial_position.x - offset, initial_position.y, initial_position.z)
+  end
+
+  if (direction_of_wind == WIND_DIRECTIONS.W) then
+      return vector():set(initial_position.x + offset, initial_position.y, initial_position.z)
+  end
+end
+
+function is_actor_in_radiation_zone(id_of_radiation_zone)
+  local se_obj = alife():object(id_of_radiation_zone)
+  local name_of_radiation_zone = se_obj:name()
+  if (not se_obj) then return false end
+
+  local data = utils_stpk.get_anom_zone_data(se_obj)
+  local maximum_radius = data and data.shapes[1].radius
+  if (not maximum_radius) then return true end
+
+  local maximum_radius_without_wind = get_max_radius_without_wind(maximum_radius)
+  local original_radius = get_original_radius_of_radiation_zone(maximum_radius) --Just for debug purposes
+  local original_position = se_obj.position
+  local actor_distance_from_original_position = get_distance(db.actor:position(), original_position) --Just for debug purposes
+  local current_radius = get_current_radius_of_radioactive_zone(maximum_radius_without_wind)
+
+  local wind_direction = radiation_table.last_wind_direction
+  local current_center_with_wind = get_current_center_of_radioactive_zone(maximum_radius_without_wind, original_position, wind_direction)
+  local actor_distance_from_current_position = get_distance(db.actor:position(), current_center_with_wind)
+
+  local current_weather = get_current_weather()
+  if (current_weather == "rain" or current_weather == "storm" or current_weather == "foggy") then
+      current_radius = original_radius
+      actor_distance_from_current_position = actor_distance_from_original_position
+  end
+
+  --Uncomment for debugging purposes
+  --show_message("NAME: "..name_of_radiation_zone.." MAX_R_WIND: "..maximum_radius.." MAX_R :"..maximum_radius_without_wind.." ORIGINAL_R: "..original_radius.." CURRENT_R: "..current_radius.." DISTANCE_O: "..actor_distance_from_original_position.." Distance_C: "..actor_distance_from_current_position)
+  --show_message("NAME: "..name_of_radiation_zone.." CURRENT_R: "..current_radius.." Distance_C: "..actor_distance_from_current_position.." IN ZONE: "..tostring(actor_distance_from_current_position <= current_radius))
+
+  return actor_distance_from_current_position <= current_radius
+end
+
+function get_distance(position_1, position_2)
+  local x = math.abs(position_1.x - position_2.x)
+  local z = math.abs(position_1.z - position_2.z)
+  local distance = math.sqrt((x * x) + (z * z))
+  return distance
+end
+  
+function is_player_in_water()
+  return load_var(db.actor,"grw_in_water") == true
+end
+
+function get_radiation_protection(object)
+  local section_object = object and object:section()
+  local id_object = object and object:id()
+  local total_radiation_protection = 0
+  local helmet_avaliable = false
+
+  local se_object = id_object and alife_object(id_object)
+  if se_object then
+      local data = utils_stpk.get_item_data(se_object)
+
+      for k,v in pairs(data) do
+          local radiation_protection = utils_data.read_from_ini(ini_sys, section_object, "radiation_protection", "float", 0)
+          total_radiation_protection = radiation_protection * object:condition()
+          helmet_avaliable = utils_data.read_from_ini(ini_sys, section_object, "helmet_avaliable", "bool", false)
+          break
+      end
+      
+      for k,v in pairs(data.upgrades) do
+          local upgrade_sect = utils_data.read_from_ini(ini_sys, tostring(v), "section", "string", nil)
+          if upgrade_sect then
+              local upgrade_radiation_protection = utils_data.read_from_ini(ini_sys, upgrade_sect, "radiation_protection", "float", 0)
+              if (upgrade_radiation_protection) then
+                  total_radiation_protection = total_radiation_protection + upgrade_radiation_protection
+              end
+          end
+      end
+
+      return total_radiation_protection
+  end
+end
+
+function is_helmet_integrated()
+  local object = db.actor:item_in_slot(7)
+
+  local section_object = object and object:section()
+  local id_object = object and object:id()
+  local helmet_avaliable = false
+
+  local se_object = id_object and alife_object(id_object)
+  if se_object then
+      local data = utils_stpk.get_item_data(se_object)
+
+      for k,v in pairs(data) do
+          helmet_avaliable = utils_data.read_from_ini(ini_sys, section_object, "helmet_avaliable", "bool", false)
+          break
+      end
+  end
+
+  return not helmet_avaliable
+end
+
+function play_random_geiger_sound()
+  local radiation = math.random(8)
+  local snd = sound_object("detectors\\geiger_" .. radiation)
+  snd:play(db.actor, 0, sound_object.s2d)
+  snd.volume = radiation_table.dosimeter_volume
+end
+
+function show_message_news(news_id, icon)
+	if news_id == nil then return false end
+
+	xr_sound.set_sound_play(AC_ID, "pda_tips")
+	
+	-- play script sound with matching section name to news id string
+	if (sound_theme.theme[news_id]) then
+		xr_sound.set_sound_play(AC_ID, news_id)
+		if (sound_theme.theme[news_id].snd_obj) then
+			local length = sound_theme.theme[news_id].snd_obj:length()
+			showtime = showtime < length and length or showtime
+		end
+	end
+
+	db.actor:give_game_news(game.translate_string("st_tip"), game.translate_string(news_id), icon, 0, 10000, 0)
+
+	return true
+end
+
+function show_message(msg,time)
+	local hud = get_hud()
+	hud:AddCustomStatic("can_use_weapon_now", true)
+	hud:GetCustomStatic("can_use_weapon_now"):wnd():TextControl():SetTextST(msg)
+	ShowMessage = true
+	ShowMessageInit = game.get_game_time()
+	ShowMessageTime = time
+end
+
+function player_has_operational_dosimeter()
+  --Return if player does not have a geiger counter or battery is dead
+	local itm_geiger = item_device.device_geiger
+	local obj_geiger = itm_geiger and db.actor:object(itm_geiger)
+	if not (obj_geiger and obj_geiger:condition() > 0.09) then
+		return false
+  else
+    return true
+	end
+end
+
+--Tracing, comment out method body for release
+function trace_this(to_trace)
+	--local log_file = io.open("log_arszi_radiation.txt", "a")
+	--log_file:write(to_trace.."\n")
+	--log_file:close(log_file)
+end
+
+function initialize_radiation_table()
+  if (not radiation_table.dosimeter_volume) then
+    radiation_table.dosimeter_volume = 1
+    trace_this("INITIALIZE - dosimeter_volume")
+  end
+
+  if (not radiation_table.wind_alert_state) then
+    radiation_table.wind_alert_state = WIND_ALERT_STATES.NoAlert
+    trace_this("INITIALIZE - wind_alert_state")
+  end
+end
+
+function remove_actor_status_icon_radiation()
+  if (actor_status.indicators["Radiation"] and actor_status.indicators["Radiation"].icon and actor_status.indicators["Radiation"].icon ~= "ui\\arszi_radiation\\radicondisable.dds") then
+    actor_status.indicators["Radiation"] = { index= 14,typ="state",functor={"actor_status","get_radiation",true},icon="ui\\arszi_radiation\\radicondisable.dds",background="ui\\arszi_radiation\\radicondisable.dds",anim_icon= true,anim_bk= false }
+    trace_this("STATUS RADIATION ICON REMOVED")
+  end
+
+  if (not ico_n_removed) then
+    local inventory_ui = ui_inventory.GUI
+    if (inventory_ui) then
+      local ico_n = inventory_ui.stat["radia"] and inventory_ui.stat["radia"].ico_n
+      if (ico_n) then
+        ico_n:SetWndPos(vector2():set(0,-1000))
+        ico_n_removed = true
+        trace_this("INVENTORY_UI ICO_N REMOVED")
+      end
+    end
+  end
+
+  if (not ico_p_removed) then
+    local inventory_ui = ui_inventory.GUI
+    if (inventory_ui) then
+      local ico_p = inventory_ui.stat["radia"] and inventory_ui.stat["radia"].ico_p
+      if (ico_p) then
+        ico_p:SetWndPos(vector2():set(0,-1000))
+        ico_p_removed = true
+        trace_this("INVENTORY_UI ICO_P REMOVED")
+      end
+    end
+  end
+end
+
+--***CALLBACKS**************************************************************************************************************************************
+function on_game_start()
+  RegisterScriptCallback("actor_on_before_hit",actor_on_before_hit)
+  RegisterScriptCallback("actor_on_update", actor_on_update)
+  RegisterScriptCallback("on_key_release", on_key_release)
+  RegisterScriptCallback("on_game_load", on_game_load)
+  RegisterScriptCallback("save_state", save_state)
+  RegisterScriptCallback("load_state", load_state)
+end
+
+function save_state(m_data)
+  m_data.radiation_table = radiation_table
+end
+
+function load_state(m_data)
+  radiation_table = m_data.radiation_table or {}
+end
+
+function on_game_load()
+  --Initialize radiation_table of not initialized
+  initialize_radiation_table()
+
+  if (ENABLE_DYNAMIC_RADIATION_ZONES) then
+    if (not radiation_table.dynamic_radiation_zones_generated) then
+      --spawn dynamic radiation fields
+      spawn_radiation_fields_at_new_game()
+      radiation_table.dynamic_radiation_zones_generated = true
+    end
+  end
+
+  if (not radiation_table.static_radiation_fields_resized) then
+    --Resize both original and new radiation fields
+    resize_radiation_fields()
+    radiation_table.static_radiation_fields_resized = true
+  end
+
+  if (ENABLE_DYNAMIC_RADIATION_ZONES_NPP) then
+    if (not radiation_table.dynamic_radiation_zones_generated_npp) then
+      --Spawn special radiation fields for NPP interrior
+      spawn_radiation_fields_for_level(special_spawn_l12u_sarcofag)
+      radiation_table.dynamic_radiation_zones_generated_npp = true
+    end
+  end
+
+  --Reset icon removal flags
+  ico_n_removed = false
+  ico_p_removed = false
+end
+
+function actor_on_before_hit(s_hit)
+  --Check if damage source is radiation
+  if (s_hit.type ~= 3) then
+    return
+  end
+
+  --Calculate new power
+  s_hit.power = calculate_zone_radiation_power(s_hit.power, s_hit.draftsman)
+end
+
+function actor_on_update()
+  --Removes the radiation indicator from the actor status icons
+  remove_actor_status_icon_radiation()
+
+  manage_radiation_zones()
+
+  manage_weather()
+
+  manage_power()
+
+  manage_satiety()
+
+  manage_geiger_sound()
+end
+
+local last_check_time = nil
+function manage_radiation_zones()
+  --Remove of player is not in the water anymore
+  if (not is_player_in_water()) then
+    if (radiation_zones[AC_ID]) then
+      radiation_zones[AC_ID] = nil
+    end
+  end
+
+  --If not underground, it will be handled elsewhere
+  if (not is_underground_map()) then return end
+
+  --If there is environmental radiation still, the player is in a radiation zone
+  if (level.get_env_rads() > 0) then return end
+  if (not last_check_time) then last_check_time = game.get_game_time() end
+
+  local current_time = game.get_game_time()
+  if (current_time:diffSec(last_check_time) > 6) then
+    for k, _ in pairs(radiation_zones) do
+      radiation_zones[k] = nil
+      last_check_time = current_time
+    end
+  end
+end
+
+local last_tick_time = nil
+function manage_geiger_sound()
+  --Return if player does not have a geiger counter or battery is dead
+  if (not player_has_operational_dosimeter()) then return end
+
+  if (not last_tick_time) then last_tick_time = game.get_game_time() end
+  local current_time = game.get_game_time()
+
+  local power = get_environmental_radiation_power()
+
+  if (power > 0.07) then
+    if (current_time:diffSec(last_tick_time) >= 0.1) then
+      play_random_geiger_sound()
+      last_tick_time = current_time
+    end
+  end
+
+  if (power > 0.06 and power <= 0.07) then
+    if (current_time:diffSec(last_tick_time) >= 0.25) then
+      play_random_geiger_sound()
+      last_tick_time = current_time
+    end
+  end
+
+  if (power > 0.055 and power <= 0.06) then
+    if (current_time:diffSec(last_tick_time) >= 0.5) then
+      play_random_geiger_sound()
+      last_tick_time = current_time
+    end
+  end
+
+  if (power > 0.05 and power <= 0.055) then
+    if (current_time:diffSec(last_tick_time) >= 1) then
+      play_random_geiger_sound()
+      last_tick_time = current_time
+    end
+  end
+
+  if (power > 0.045 and power <= 0.05) then
+    if (current_time:diffSec(last_tick_time) >= 2) then
+      play_random_geiger_sound()
+      last_tick_time = current_time
+    end
+  end
+
+  if (power > 0.04 and power <= 0.045) then
+    if (current_time:diffSec(last_tick_time) >= 3) then
+      play_random_geiger_sound()
+      last_tick_time = current_time
+    end
+  end
+
+  if (power > 0.035 and power <= 0.04) then
+    if (current_time:diffSec(last_tick_time) >= 4) then
+      play_random_geiger_sound()
+      last_tick_time = current_time
+    end
+  end
+
+  if (power > 0.03 and power <= 0.035) then
+    if (current_time:diffSec(last_tick_time) >= 5) then
+      play_random_geiger_sound()
+      last_tick_time = current_time
+    end
+  end
+
+  if (power > 0.025 and power <= 0.03) then
+    if (current_time:diffSec(last_tick_time) >= 6) then
+      play_random_geiger_sound()
+      last_tick_time = current_time
+    end
+  end
+
+  if (power > 0.02 and power <= 0.025) then
+    if (current_time:diffSec(last_tick_time) >= 7) then
+      play_random_geiger_sound()
+      last_tick_time = current_time
+    end
+  end
+
+  if (power > 0.015 and power <= 0.02) then
+    if (current_time:diffSec(last_tick_time) >= 8) then
+      play_random_geiger_sound()
+      last_tick_time = current_time
+    end
+  end
+
+  if (power > 0.01 and power <= 0.015) then
+    if (current_time:diffSec(last_tick_time) >= 9) then
+      play_random_geiger_sound()
+      last_tick_time = current_time
+    end
+  end
+
+  if (not (math.floor(power) == 0) and power <= 0.01) then
+    if (current_time:diffSec(last_tick_time) >= 10) then
+      play_random_geiger_sound()
+      last_tick_time = current_time
+    end
+  end
+end
+
+--Issues wind alert
+function issue_wind_alert(wind_power, previous_wind_power)
+  --If notifications are not enabled, do not send them
+  if (not ENABLE_WIND_POWER_NOTIFICATIONS) then return end
+
+  --Return if PDA is not charged
+  if (not item_device.is_pda_charged(true)) then return end
+
+  --Return if surge or psy storm have started
+  if (xr_conditions.surge_started()) then return end
+
+  --If underground map, do not send notification
+  if (is_underground_map()) then return end
+
+  wind_power = math.floor(wind_power)
+  previous_wind_power = math.floor(previous_wind_power)
+
+  if (wind_power > max_wind_power_percent(60) and wind_power > previous_wind_power) then
+    if (radiation_table.wind_alert_state ~= WIND_ALERT_STATES.Strong) then
+      show_message_news("st_warning_medium_to_strong", "ui_inGame2_V_zone_nedavno_proshel_vibros")
+      radiation_table.wind_alert_state = WIND_ALERT_STATES.Strong
+      return
+    end
+  end
+
+  if (wind_power > max_wind_power_percent(30) and wind_power <= max_wind_power_percent(60) and wind_power > previous_wind_power) then
+    if (radiation_table.wind_alert_state ~= WIND_ALERT_STATES.Medium) then
+      show_message_news("st_warning_none_to_medium", "ui_inGame2_V_zone_nedavno_proshel_vibros")
+      radiation_table.wind_alert_state = WIND_ALERT_STATES.Medium
+      return
+    end
+  end
+
+  if (wind_power <= max_wind_power_percent(60) and wind_power > max_wind_power_percent(30) and previous_wind_power > wind_power) then
+    if (radiation_table.wind_alert_state ~= WIND_ALERT_STATES.Medium) then
+      show_message_news("st_warning_strong_to_medium", "ui_inGame2_V_zone_nedavno_proshel_vibros")
+      radiation_table.wind_alert_state = WIND_ALERT_STATES.Medium
+      return
+    end
+  end
+
+  if (wind_power <= max_wind_power_percent(30) and previous_wind_power > wind_power) then
+    if (radiation_table.wind_alert_state ~= WIND_ALERT_STATES.NoAlert) then
+      show_message_news("st_warning_medium_to_none", "ui_inGame2_V_zone_nedavno_proshel_vibros")
+      radiation_table.wind_alert_state = WIND_ALERT_STATES.NoAlert
+      return
+    end
+  end
+  
+end
+
+--Issues weather report
+function issue_weather_report(current_weather, previous_weather)
+  --If notifications are not enabled, do not send them
+  if (not ENABLE_WEATHER_REPORTS) then return end
+
+  --Return if PDA is not charged
+  if (not item_device.is_pda_charged(true)) then return end
+
+  --Return if surge or psy storm have started
+  if (xr_conditions.surge_started()) then return end
+
+  --If underground map, do not send notification
+  if (is_underground_map()) then return end
+
+  local weather_text = ""
+
+  --clear
+  if (current_weather == "clear" and previous_weather == "partly") then weather_text = "st_weather_clear_from_partly" end
+  if (current_weather == "clear" and previous_weather == "foggy") then  weather_text = "st_weather_clear_from_foggy" end
+  if (current_weather == "clear" and previous_weather == "cloudy") then weather_text = "st_weather_clear_from_cloudy" end
+  if (current_weather == "clear" and previous_weather == "rain") then weather_text = "st_weather_clear_from_rain" end
+  if (current_weather == "clear" and previous_weather == "storm") then weather_text = "st_weather_clear_from_storm" end
+
+  --partly
+  if (current_weather == "partly" and previous_weather == "clear") then weather_text = "st_weather_partly_from_clear" end
+  if (current_weather == "partly" and previous_weather == "foggy") then  weather_text = "st_weather_partly_from_foggy" end
+  if (current_weather == "partly" and previous_weather == "cloudy") then weather_text = "st_weather_partly_from_cloudy" end
+  if (current_weather == "partly" and previous_weather == "rain") then  weather_text = "st_weather_partly_from_rain" end
+  if (current_weather == "partly" and previous_weather == "storm") then weather_text = "st_weather_partly_from_storm" end
+
+  --foggy
+  if (current_weather == "foggy" and previous_weather == "clear") then weather_text = "st_weather_foggy_from_clear" end
+  if (current_weather == "foggy" and previous_weather == "partly") then weather_text = "st_weather_foggy_from_partly" end
+  if (current_weather == "foggy" and previous_weather == "cloudy") then weather_text = "st_weather_foggy_from_cloudy" end
+  if (current_weather == "foggy" and previous_weather == "rain") then weather_text = "st_weather_foggy_from_rain"  end
+  if (current_weather == "foggy" and previous_weather == "storm") then  weather_text = "st_weather_foggy_from_storm" end
+
+  --cloudy
+  if (current_weather == "cloudy" and previous_weather == "clear") then weather_text = "st_weather_cloudy_from_clear" end
+  if (current_weather == "cloudy" and previous_weather == "partly") then weather_text = "st_weather_cloudy_from_partly" end
+  if (current_weather == "cloudy" and previous_weather == "foggy") then weather_text = "st_weather_cloudy_from_foggy" end
+  if (current_weather == "cloudy" and previous_weather == "rain") then weather_text = "st_weather_cloudy_from_rain" end
+  if (current_weather == "cloudy" and previous_weather == "storm") then weather_text = "st_weather_cloudy_from_storm" end
+
+  --rain
+  if (current_weather == "rain" and previous_weather == "clear") then weather_text = "st_weather_rain_from_clear" end
+  if (current_weather == "rain" and previous_weather == "partly") then weather_text = "st_weather_rain_from_partly" end
+  if (current_weather == "rain" and previous_weather == "cloudy") then weather_text = "st_weather_rain_from_cloudy" end
+  if (current_weather == "rain" and previous_weather == "foggy") then weather_text = "st_weather_rain_from_foggy" end
+  if (current_weather == "rain" and previous_weather == "storm") then weather_text = "st_weather_rain_from_storm" end
+
+  --storm
+  if (current_weather == "storm" and previous_weather == "clear") then weather_text = "st_weather_storm_from_clear" end
+  if (current_weather == "storm" and previous_weather == "partly") then weather_text = "st_weather_storm_from_partly" end
+  if (current_weather == "storm" and previous_weather == "cloudy") then weather_text = "st_weather_storm_from_cloudy" end
+  if (current_weather == "storm" and previous_weather == "rain") then weather_text = "st_weather_storm_from_rain" end
+  if (current_weather == "storm" and previous_weather == "foggy") then weather_text = "st_weather_storm_from_foggy" end
+
+  --Override some texts with sunlight in them during night
+  local hour = level.get_time_hours()
+  if (hour <= 6 or hour >= 20) then
+    if (current_weather == "clear" and previous_weather == "partly") then weather_text = "st_weather_clear_from_partly_night" end
+    if (current_weather == "clear" and previous_weather == "foggy") then weather_text = "st_weather_clear_from_foggy_night" end
+    if (current_weather == "clear" and previous_weather == "storm") then weather_text = "st_weather_clear_from_storm_night" end
+    if (current_weather == "storm" and previous_weather == "clear") then weather_text = "st_weather_storm_from_clear_night" end
+  end
+
+  --Select icon
+  local current_icon = "" --"ui_inGame2_Radiopomehi"
+  if (current_weather == "clear") then current_icon = "ui_weather_clear" end
+  if (current_weather == "partly") then current_icon = "ui_weather_partly" end
+  if (current_weather == "foggy") then current_icon = "ui_weather_foggy" end
+  if (current_weather == "cloudy") then current_icon = "ui_weather_cloudy" end
+  if (current_weather == "rain") then current_icon = "ui_weather_rain" end
+  if (current_weather == "storm") then current_icon = "ui_weather_storm" end
+
+  show_message_news(weather_text, current_icon)
+end
+
+--Get information about the current weather by pressing key "9"
+function on_key_release(key)
+  --Weather
+  if (key == DIK_keys[WEATHER_INFO_KEY] or key == DIK_keys["DIK_TAB"]) then
+    --check of level is an underground level
+    local name_of_level = level.name()
+    if (not name_of_level) then return end
+
+    if (underground_maps[name_of_level]) then
+      show_message("st_underground", 1000)
+      return
+    end
+
+    local current_weather = get_weather_text(get_current_weather())
+    local wind_velocity = get_wind_velocity()
+    local wind_direction = radiation_table.last_wind_direction
+
+    if (wind_velocity ~= nil and wind_direction ~= nil) then
+      show_message(game.translate_string("st_weather_is").." "..current_weather..". "..get_wind_power_text(wind_velocity).." "..get_wind_direction_text(wind_direction), 1000)
+    end
+  end
+
+  --Dosimeter volume up
+  if (key == DIK_keys[DOSIMETER_VOLUME_UP_KEY]) then
+    if (not player_has_operational_dosimeter()) then return end
+
+    if (radiation_table.dosimeter_volume > 1.9) then
+      show_message("Dosimeter volume: MAX")
+      return
+    end
+
+    radiation_table.dosimeter_volume = radiation_table.dosimeter_volume + 0.2
+
+    if (radiation_table.dosimeter_volume > 1.9) then
+      show_message("Dosimeter volume: MAX")
+    else
+      show_message("Dosimeter volume: "..radiation_table.dosimeter_volume)
+    end
+  end
+
+  --Dosimeter volume down
+  if (key == DIK_keys[DOSIMETER_VOLUME_DOWN_KEY]) then
+    if (not player_has_operational_dosimeter()) then return end
+
+    if (radiation_table.dosimeter_volume < 0.1) then
+      show_message("Dosimeter volume: MUTED")
+      return
+    end
+
+    radiation_table.dosimeter_volume = radiation_table.dosimeter_volume - 0.2
+
+    if (radiation_table.dosimeter_volume < 0.1) then
+      show_message("Dosimeter volume: MUTED") 
+    else
+      show_message("Dosimeter volume: "..radiation_table.dosimeter_volume)
+    end
+  end
+end
+
+--***WEATHER**************************************************************************************************************************************
+function manage_weather()
+  local name_of_level = level.name()
+  if (not name_of_level) then return end
+
+  --Check if weather changed, and calculate new wind direction, if yes
+  if (not radiation_table.last_weather) then
+    radiation_table.last_weather = get_current_weather()
+  end
+
+  if (not radiation_table.last_wind_direction) then
+    radiation_table.last_wind_direction = get_new_wind_direction()
+  end
+
+  if (not radiation_table.last_wind_velocity) then
+    radiation_table.last_wind_velocity = get_wind_velocity()
+  end
+
+  local current_weather = get_current_weather()
+
+  --Issue wind warning if necessary
+  if (current_weather == "clear" or current_weather == "partly" or current_weather == "cloudy") then
+    local current_wind_velocity = get_wind_velocity()
+    --Issues wind alert if wind velocity is too high
+    issue_wind_alert(current_wind_velocity, radiation_table.last_wind_velocity)
+
+    radiation_table.last_wind_velocity = current_wind_velocity
+  end
+
+  --Change wind direction on weather change
+  if (current_weather ~= radiation_table.last_weather) then
+    --Issue new weather report
+    issue_weather_report(current_weather, radiation_table.last_weather)
+
+    radiation_table.last_weather = current_weather
+    radiation_table.last_wind_direction = get_new_wind_direction()
+  end
+end
+
+--Gets a new wind direction randomly, favouring western directions mostly
+function get_new_wind_direction()
+  local rand = math.random(100)
+
+  if (rand >= 60) then
+    local direction = math.random(100)
+    if (direction >= 60) then
+      return WIND_DIRECTIONS.W
+    elseif (direction >= 30) then
+      return WIND_DIRECTIONS.SW
+    else
+      return WIND_DIRECTIONS.NW
+    end
+
+  elseif (rand >= 40) then
+     local direction = math.random(100)
+     if (direction >= 60) then
+       return WIND_DIRECTIONS.N
+     elseif (direction >= 30) then
+       return WIND_DIRECTIONS.NW
+     else
+       return WIND_DIRECTIONS.NE
+     end
+
+  elseif (rand >= 20) then
+    local direction = math.random(100)
+    if (direction >= 60) then
+      return WIND_DIRECTIONS.E
+    elseif (direction >= 30) then
+      return WIND_DIRECTIONS.NE
+    else
+      return WIND_DIRECTIONS.SE
+    end
+
+  else
+    local direction = math.random(100)
+    if (direction >= 60) then
+      return WIND_DIRECTIONS.S
+    elseif (direction >= 30) then
+      return WIND_DIRECTIONS.SE
+    else
+     return WIND_DIRECTIONS.SW
+    end
+  end
+end
+
+--Gets the text for the corresponding wind power
+function get_wind_power_text(wind_velocity)
+  if (wind_velocity == 0) then
+    return game.translate_string("st_wind_power_no_wind")
+  elseif (wind_velocity < max_wind_power_percent(15)) then
+    return game.translate_string("st_wind_power_slight_breeze")
+  elseif (wind_velocity < max_wind_power_percent(30)) then
+    return game.translate_string("st_wind_power_weak")
+  elseif (wind_velocity < max_wind_power_percent(40)) then
+    return game.translate_string("st_wind_power_moderate")
+  elseif (wind_velocity < max_wind_power_percent(55)) then
+    return game.translate_string("st_wind_power_strong")
+  elseif (wind_velocity < max_wind_power_percent(70)) then
+    return game.translate_string("st_wind_power_very_strong")
+  else
+    return game.translate_string("st_wind_power_storm")
+  end
+end
+
+--Gets the text for the corresponding wind direction
+function get_wind_direction_text(wind_direction)
+  if (wind_direction == WIND_DIRECTIONS.No_wind) then
+    return ""
+  end
+
+  local text = game.translate_string("st_direction").." "
+  if (wind_direction == WIND_DIRECTIONS.N) then
+    return text..game.translate_string("st_direction_north")
+  elseif (wind_direction == WIND_DIRECTIONS.NE) then
+    return text..game.translate_string("st_direction_north_east")
+  elseif (wind_direction == WIND_DIRECTIONS.E) then
+    return text..game.translate_string("st_direction_east")
+  elseif (wind_direction == WIND_DIRECTIONS.SE) then
+    return text..game.translate_string("st_direction_south_east")
+  elseif (wind_direction == WIND_DIRECTIONS.S) then
+    return text..game.translate_string("st_direction_south")
+  elseif (wind_direction == WIND_DIRECTIONS.SW) then
+    return text..game.translate_string("st_direction_south_west")
+  elseif (wind_direction == WIND_DIRECTIONS.W) then
+    return text..game.translate_string("st_direction_west")
+  elseif (wind_direction == WIND_DIRECTIONS.NW) then
+    return text..game.translate_string("st_direction_north_west")
+  end
+end
+
+function get_weather_text(current_weather)
+  if (current_weather == "clear") then
+    return game.translate_string("st_clear")
+  end
+
+  if (current_weather == "partly") then
+    return game.translate_string("st_partly_clear")
+  end
+
+  if (current_weather == "foggy") then
+    return game.translate_string("st_foggy")
+  end
+
+  if (current_weather == "cloudy") then
+    return game.translate_string("st_cloudy")
+  end
+
+  if (current_weather == "rain") then
+    return game.translate_string("st_rain")
+  end
+
+  if (current_weather == "storm") then
+    return game.translate_string("st_storm")
+  end
+
+  return ""
+end
+
+function get_current_weather()
+  return level_weathers.get_weather_manager():get_curr_weather() or ""
+end
+
+function get_wind_velocity()
+  local wind_velocity = weather.get_value_numric("wind_velocity") or 0
+  if (wind_velocity > 0) then
+      return wind_velocity
+  else
+      return 1
+  end
+end
+
+function max_wind_power_percent(percentage)
+  return MAX_WIND_VELOCITY * (percentage / 100)
+end
