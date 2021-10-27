@@ -244,7 +244,7 @@ function actor_on_update(b,d)
 	end
 	
 	last_drink_chk = curr_time
-	-- log(" !The usual increase in thirst is 6. Thirst before: " .. "last_drink)
+	-- log(" !The usual increase in thirst is 6. Thirst before: " .. last_drink)
 	
 	last_drink = last_drink + up_drink
 	
