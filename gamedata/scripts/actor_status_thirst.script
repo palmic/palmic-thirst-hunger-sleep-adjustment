@@ -7,8 +7,8 @@
 local last_drink, last_drink_chk, pwr_chk
 local feature_state
 
-local up_drink				= 30 -- step
-local in_hour				= 200 -- amount increased every sleep hour
+local up_drink				= 10 -- step
+local in_hour				= 60 -- amount increased every sleep hour
 local start_blur_1 			= 1440 -- value at which gray indicator appear
 local start_blur_2 			= 2880 -- value at which yellow indicator appear
 local start_blur_3 			= 4320 -- value at which orange indicator appear
