@@ -1,11 +1,8 @@
--- Changed for IMM	by Faustle (2018)
--- Edited by Tronex
--- Date: 2018/11/7
--- Sleep deprivation
+-- Changed by Palmic (2021)
 
--- Updated: 2021/14/03
--- By: TKCrits
--- Addon: Immersive Sleep v1.0.1b
+-- requires:
+--    ARSZI\'S DYNAMIC RADIATION ZONES AND RADIATION OVERHAUL V2.1 FOR ANOMALY 1.5.1
+--    [2.0.0] GROK\'S BODY HEALTH SYSTEM REDUX
 
 local last_sleep, last_sleep_chk, pwr_chk
 local feature_state
@@ -17,7 +14,7 @@ local up_sleep				= 27 -- step
 -- 510 = 4080, because the zone is not the most comfortable.
 -- Food also increases sleepiness.
 -- Should look into how bedrolls can improve sleep
-local in_hour				= 510 -- amount decreased every sleep hour
+local in_hour				= 625 -- amount decreased every sleep hour
 
 local start_blur_1 			= 5000 -- value at which gray indicator appear
 local start_blur_2 			= 6250 -- value at which yellow indicator appear
