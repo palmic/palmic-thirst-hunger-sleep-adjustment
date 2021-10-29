@@ -44,7 +44,7 @@ local arszi_previous_time = nil
 local FASTING_INFO_KEY="DIK_NUMPAD9"
 function on_key_release(key)
 	if (key == DIK_keys[FASTING_INFO_KEY]) then
-		printf("last_drink_chk=%s last_drink=%s",last_drink_chk and game.get_game_time():diffSec(last_drink_chk) or "nil",last_drink)
+		printf("last_drink=%s", last_drink)
 	end
 end
 

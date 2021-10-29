@@ -10,7 +10,8 @@ local ENABLE_DYNAMIC_RADIATION_ZONES = true --Enables spawning dynamic radiation
 local ENABLE_DYNAMIC_RADIATION_ZONES_NPP = true --Enables spawning dynamic radiation zones at New Game for the interrior of the Nuclear Power Plant
 
 --Weather
-local WEATHER_INFO_KEY = "DIK_9"
+local WEATHER_INFO_KEY  = "DIK_9"
+local FASTING_INFO_KEY  = "DIK_NUMPAD9"
 local MAX_WIND_VELOCITY = 700 --Maximum value for wind velocity, which affects radiation zone strength and szize.
 local POWER_REDUCTION_BY_RAIN = 0.75 --Radiation zones will done this percentage of their damage in case of rain or storm
 local MAX_SIZE_INCREASEMENT_BY_WIND = 3 --At maximal wind power, radiation zones will incerase their size by this factor
@@ -1390,6 +1391,9 @@ end
 --Get information about the current weather by pressing key "9"
 function on_key_release(key)
   --Weather
+	if (key == DIK_keys[FASTING_INFO_KEY]) then
+		printf("last_satiety=%s last_power=%s", radiation_table.last_satiety, radiation_table.last_power)
+	end
   if (key == DIK_keys[WEATHER_INFO_KEY] or key == DIK_keys["DIK_TAB"]) then
     --check of level is an underground level
     local name_of_level = level.name()

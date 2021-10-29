@@ -31,6 +31,13 @@ local pwr_rate,rng_factor 	= -0.00010, 0.08
 
 local comfy 				= 0
 	
+local FASTING_INFO_KEY="DIK_NUMPAD9"
+function on_key_release(key)
+	if (key == DIK_keys[FASTING_INFO_KEY]) then
+		printf("last_sleep=%s", last_sleep)
+	end
+end
+
 function create()
 	printdbg("- Sleep deprivation | Enabled")
 	feature_state = true
@@ -38,6 +45,7 @@ function create()
 	RegisterScriptCallback("actor_on_update",actor_on_update)
 	RegisterScriptCallback("actor_on_item_use",actor_on_item_use)
 	RegisterScriptCallback("actor_on_sleep",actor_on_sleep)
+	RegisterScriptCallback("on_key_release",on_key_release)
 	actor_status.add_indicator("Sleep",{
 		index= 4,
 		typ= "state",
