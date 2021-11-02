@@ -34,9 +34,9 @@ local arszi_thirst_run = 1 --Thirst increasement per in-game seconds while the p
 
 --Difficulty-based water loss while bleeding settings. Thirst increasement multiplied by bleeding intensity per in-game seconds.
 local arszi_bleeding_thirst_table = {
-	Easy = 10,
-	Medium = 20,
-	Hard = 30
+	Easy = 2,
+	Medium = 4,
+	Hard = 6
 }
 
 local arszi_previous_time = nil
