@@ -1394,7 +1394,7 @@ function on_key_release(key)
 	if (key == DIK_keys[FASTING_INFO_KEY]) then
 		printf("last_satiety=%s last_power=%s", radiation_table.last_satiety, radiation_table.last_power)
 	end
-  if (key == DIK_keys[WEATHER_INFO_KEY] or key == DIK_keys["DIK_TAB"]) then
+  if (key == DIK_keys[WEATHER_INFO_KEY]) then
     --check of level is an underground level
     local name_of_level = level.name()
     if (not name_of_level) then return end
