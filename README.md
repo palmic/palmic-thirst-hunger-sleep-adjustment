@@ -24,8 +24,9 @@ I just changed configuration of his mod here - all credits to Arzi for his great
 * Red icon means you are severely dehydrated, now you are also starting to lose health. But this state should not appear sooner than after 2 days without water.
 
 ### If you are moving however, situation is different:
-* By walking, next thirst level will appear 2.3x sooner (grey from full hydration about 10,5 hour of walk)
-* By running or sprinting (there is no difference now), next thirst level will appear 5x sooner (grey from full hydration in 6 hour of running)
+* By walking, next thirst level will appear ~2.3x sooner (grey from full hydration in ~12 hour of walk)
+* By running, next thirst level will appear ~5x sooner (grey from full hydration in ~6 hour of running)
+* By sprinting, next thirst level will appear ~10x sooner (grey from full hydration in ~3 hour of sprinting)
 
 So now, you are drinking to not to feel dehydrated and lose any stamina benefit. If you will get lost at trip, you can dehydrate enough to start to lose health, however, its not so often now.
 Basically 1,5L of water should be enough to hydrate for a day now, if you will not be running too much.

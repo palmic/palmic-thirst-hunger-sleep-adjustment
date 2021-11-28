@@ -27,14 +27,19 @@ local die_chance 			= 5
 
 local ARSZI_ENABLE_THIRST_FEATURES = true --Enable extra water loss while walking/running/bleeding. This setting DOES NOT affect radiation-related water loss!
 local arszi_radiation_thirst_reduction_ratio = 3 --Thirst satiety by drinking is reduced by X at maximum radiation level
-local arszi_thirst_walk_threshold = 2 --Above this velocity the player is walking
-local arszi_thirst_run_threshold = 5 --Above this velocity the player is running/sprinting
+
+local arszi_thirst_walk_threshold = 1 --Above this velocity the player is walking
+local arszi_thirst_run_threshold = 2 --Above this velocity the player is running/sprinting
+local arszi_thirst_sprint_threshold = 5 --Above this velocity the player is running/sprinting
 
 --Thirst increasement coeficien per in-game seconds while the player is walking
-local arszi_thirst_walk_coef = 0.00049
+local arszi_thirst_walk_coef = 0.00042875
 
---Thirst increasement coeficien per in-game seconds while the player is running/sprinting
+--Thirst increasement coeficien per in-game seconds while the player is running
 local arszi_thirst_run_coef = 0.00420
+
+--Thirst increasement coeficien per in-game seconds while the player is sprinting
+local arszi_thirst_sprint_coef = 0.008
 
 
 --Difficulty-based water loss while bleeding settings. Thirst increasement multiplied by bleeding intensity per in-game seconds.
@@ -226,7 +231,10 @@ function actor_on_update(b,d)
 			local vec = db.actor:get_movement_speed()
 			local cur_speed = math.sqrt(vec.x*vec.x+vec.y*vec.y+vec.z*vec.z)
 			--arszi_radiation.show_message("SPEED: "..tostring(math.sqrt(vec.x*vec.x+vec.y*vec.y+vec.z*vec.z)))
-			if (cur_speed > arszi_thirst_run_threshold) then
+			if (cur_speed > arszi_thirst_sprint_threshold) then
+				--arszi_radiation.show_message("SPRINT: "..last_drink)
+				last_drink = last_drink + up_drink * arszi_thirst_sprint_coef
+			elseif (cur_speed > arszi_thirst_run_threshold) then
 				--arszi_radiation.show_message("RUN: "..last_drink)
 				last_drink = last_drink + up_drink * arszi_thirst_run_coef
 			elseif (cur_speed > arszi_thirst_walk_threshold) then
