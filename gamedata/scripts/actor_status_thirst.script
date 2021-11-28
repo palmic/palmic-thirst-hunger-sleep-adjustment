@@ -31,12 +31,10 @@ local arszi_thirst_walk_threshold = 2 --Above this velocity the player is walkin
 local arszi_thirst_run_threshold = 5 --Above this velocity the player is running/sprinting
 
 --Thirst increasement coeficien per in-game seconds while the player is walking
---If player is walking, thirst will incremment by up_drink + up_drink * arszi_thirst_walk_coef
-local arszi_thirst_walk_coef = 1.3
+local arszi_thirst_walk_coef = 0.000028
 
 --Thirst increasement coeficien per in-game seconds while the player is running/sprinting
---If player is running, thirst will incremment by up_drink + up_drink * arszi_thirst_run_threshold
-local arszi_thirst_run_coef = 4
+local arszi_thirst_run_coef = 0.000183
 
 
 --Difficulty-based water loss while bleeding settings. Thirst increasement multiplied by bleeding intensity per in-game seconds.
@@ -210,7 +208,7 @@ end
 
 function actor_on_update(b,d)
 	--printf("last_drink_chk=%s last_drink=%s",last_drink_chk and game.get_game_time():diffSec(last_drink_chk) or "nil",last_drink)
-	
+
 	-- God mode console command enabled.
 	if (get_console_cmd(1,"g_god")) then
 		return true
