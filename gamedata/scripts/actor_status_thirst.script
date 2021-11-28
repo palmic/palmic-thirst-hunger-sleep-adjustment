@@ -31,10 +31,10 @@ local arszi_thirst_walk_threshold = 2 --Above this velocity the player is walkin
 local arszi_thirst_run_threshold = 5 --Above this velocity the player is running/sprinting
 
 --Thirst increasement coeficien per in-game seconds while the player is walking
-local arszi_thirst_walk_coef = 0.000028
+local arszi_thirst_walk_coef = 0.00049
 
 --Thirst increasement coeficien per in-game seconds while the player is running/sprinting
-local arszi_thirst_run_coef = 0.000183
+local arszi_thirst_run_coef = 0.00420
 
 
 --Difficulty-based water loss while bleeding settings. Thirst increasement multiplied by bleeding intensity per in-game seconds.
